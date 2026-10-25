@@ -1,0 +1,99 @@
+# 每天自動跑一期，把頁面發到 GitHub Pages，資料庫存在 data 分支裡接著累積。
+#
+# 第一次使用要做兩件事（見 README「用 GitHub 自動跑」）：
+#   1. Settings → Secrets and variables → Actions：新增 YOUTUBE_API_KEY 和 LLM_API_KEY
+#   2. Settings → Pages → Source 選 GitHub Actions
+# 然後到 Actions 頁籤手動按一次 Run workflow，之後就每天自己跑。
+
+name: 每日情報
+
+on:
+  schedule:
+    - cron: "0 22 * * *"    # UTC 22:00 = 台灣時間 06:00
+    - cron: "0 23 * * *"    # 07:00 再跑一次補漏；當天已經出過會自動跳過
+  workflow_dispatch:
+    inputs:
+      reuse_hours:
+        description: "不重新採集，用最近幾小時存下的內容重新分析（改提示詞時用；0 = 正常採集）"
+        default: "0"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: daily-radar
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      # 下面幾個可以到 Settings → Secrets and variables → Actions → Variables 覆寫，不填就用 .env.example 的預設
+      LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+      LLM_MODEL: ${{ vars.LLM_MODEL }}
+      RADAR_SITE_NAME: ${{ vars.RADAR_SITE_NAME }}
+      RADAR_SITE_BY: ${{ vars.RADAR_SITE_BY }}
+      RADAR_EDITOR: ${{ vars.RADAR_EDITOR }}
+      YT_REGION: ${{ vars.YT_REGION }}
+      YT_LANG: ${{ vars.YT_LANG }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RADAR_DATA_DIR: ${{ github.workspace }}/radar-data
+      RADAR_SHARE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/#intel-radar?day={day}&item={item}
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 取回 data 分支（資料庫和上次的頁面）
+        run: |
+          REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$REMOTE" data >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch data --single-branch "$REMOTE" radar-data
+          else
+            mkdir radar-data
+            git -C radar-data init --quiet -b data
+            git -C radar-data remote add origin "$REMOTE"
+            printf 'logs/\n' > radar-data/.gitignore
+          fi
+          echo "DB: $(ls -la radar-data/radar.db 2>/dev/null || echo '還沒有，這是第一期')"
+
+      - name: 跑一期
+        run: |
+          if [ "${{ github.event.inputs.reuse_hours || '0' }}" != "0" ]; then
+            python3 -m radar run --reuse "${{ github.event.inputs.reuse_hours }}"
+          else
+            python3 -m radar run --if-missing
+          fi
+
+      - name: 把資料庫和頁面存回 data 分支
+        run: |
+          cd radar-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "沒有變化，不用提交"
+          else
+            git commit --quiet -m "radar: $(date -u +%Y-%m-%d) 的資料"
+            git push --quiet origin data
+          fi
+
+      - name: 打包頁面
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: radar-data/site
+
+  deploy:
+    needs: run
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 發布到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

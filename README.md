@@ -78,7 +78,23 @@ python3 -m radar status              # 最近幾次執行
 
 模型方面 Gemini 免費層一期 4 到 6 次呼叫，約 6 到 8 萬 token，不用錢。
 
-## 每天自動跑
+## 用 GitHub 自動跑（最省事，不用自己的電腦）
+
+倉庫裡的 `.github/workflows/daily.yml` 會讓 GitHub Actions 每天台灣時間早上 6 點跑一期，把頁面發到 GitHub Pages，資料庫存在 `data` 分支裡接著累積。全部免費。
+
+第一次設定：
+
+1. 倉庫頁面 → **Settings → Secrets and variables → Actions → New repository secret**，新增兩個：
+   - `YOUTUBE_API_KEY`：YouTube Data API 金鑰
+   - `LLM_API_KEY`：Gemini 金鑰
+2. **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
+3. 到 **Actions** 頁籤，點左邊的「每日情報」，按 **Run workflow** 手動跑第一次（約 5 分鐘）。
+
+跑完頁面在 `https://<你的帳號>.github.io/yt-radar/`。之後每天自動更新，不用再管。
+
+想改站名、模型或只看台灣影片，到 **Settings → Secrets and variables → Actions → Variables** 新增 `RADAR_SITE_NAME`、`LLM_MODEL`、`YT_REGION` 這些變數即可，名字和 `.env.example` 裡的一樣。改了提示詞想不花配額重新分析，Run workflow 時把 reuse_hours 填 `24`。
+
+## 在自己電腦上每天自動跑
 
 用 cron 每天早上跑一次。日期按台北時間算，`--if-missing` 保證當天已經出過就跳過，所以可以設兩個時間點，第一次失敗了第二次補：
 
