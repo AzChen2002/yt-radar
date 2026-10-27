@@ -1,0 +1,31 @@
+{
+ "version": 1,
+ "day": "2026-10-27",
+ "generated_at": 1793064173.6243067,
+ "generated_bj": "2026-10-27 09:22",
+ "history_days": 1,
+ "summary": "",
+ "headline": [],
+ "sections": {
+  "hotwords": [],
+  "x": [],
+  "video": [],
+  "tools": {
+   "repos": [],
+   "models": [],
+   "stories": []
+  },
+  "news": []
+ },
+ "stats": {
+  "items": 322,
+  "by_source": {
+   "github": 208,
+   "hf": 50,
+   "hn": 14,
+   "technews": 40,
+   "inside": 6,
+   "producthunt": 4
+  }
+ }
+}
